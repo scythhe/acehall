@@ -4,7 +4,7 @@
 | --- | --------------------------------- | ------- |
 | 0   | Scaffold & foundations            | ✅ Done |
 | 1   | Greybox scene & player            | ✅ Done |
-| 2   | Interaction & sit-down transition | —       |
+| 2   | Interaction & sit-down transition | ✅ Done |
 | 3   | Overlay, adapter & demo           | —       |
 | 4   | Asset pipeline & art pass         | —       |
 | 5   | White-labeling & localization     | —       |
@@ -104,3 +104,49 @@
 6. Press 1-7 to jump to each zone (works with the overlay on or off) (spawn, slots, tables/poker, live dealer, VIP, bar, cashier). Check the poker tables show 9, 9, 6 and 6 seat discs.
 7. Console: no errors (the known warnings above are expected).
 8. Phone (same Wi-Fi): `npm run dev -- --host` and open the printed URL. The scene renders full-screen and fits without scrolling. Touch controls do not exist yet (Phase 6), so you cannot move on a phone.
+
+---
+
+## Phase 2 — Interaction & sit-down transition (2026-09-21)
+
+### Done
+
+- **Interactables** (`src/interaction/interactables.ts`): only anchors mapped in `config.objects` are interactive (one per seat, so each poker chair is separate), plus the cashier desk when the adapter has `openCashier`. Disabled zones and unmapped anchors stay decorative. The demo config now maps a placeholder game onto every anchor.
+- **Focus** (`proximity.ts`): within `interaction.range` of a seat and inside a facing cone; nearest and best-aligned wins. Drives a prompt ("Press E to play _Name_" / "Tap to play _Name_" on coarse pointers, tappable) and a highlight (additive pulse over the object plus a ring at the focused seat).
+- **State machine** (`machine.ts`, pure): `free → walking → sitting → easingIn → seated → easingOut → standing → free`. `step.ts` runs it each frame from `PlayerRig`, before movement. While it is not `free`, input (movement, orbit, pointer lock) is locked and the step owns the avatar and camera.
+- **Walk to seat** (`path.ts`): short authored path (approach point straight out from the seat, then the seat), with acceleration, deceleration and turn to the seat heading. A test checks that no seat's final approach crosses a collider. Esc cancels the walk.
+- **Sit pose:** procedural (avatar squashes to `seatedScaleY`), to be replaced by a real animation in Phase 4. Camera eases with ease-in-out cubic (1.0 s) between the orbit rig and the seat's camera anchor; leaving reverses it (camera, stand, unlock) and re-aims the orbit camera along the avatar's facing.
+- **Avatar fade:** the avatar fades out when the camera is close to its head (walls and seated view). This closes the Phase 1 issue.
+- **Events to the adapter:** `object_interacted` (walk starts), `game_opened` (seated), `game_closed` (leave starts, with `durationMs`); cashier calls `openCashier()`.
+- **Leaving is E** (Esc still works as a fallback, but browsers also use it to release pointer lock, so E is the primary key). **Looking around while seated:** drag (or pointer lock) turns the view from the seat anchor within `TUNING.interaction.seatedLook` limits; the offset eases out as the camera returns on leaving.
+- **Placeholder for Phase 3:** while seated, a small panel shows the game name and a Leave button. The game overlay replaces it and should trigger the same `cancelPressed` request.
+- **i18n:** minimal `translate`/`useT` with ka/en/ru strings for this UI and operator overrides (`config.locale.overrides`); Phase 5 expands it.
+- All timings and ranges are in `TUNING.interaction`. 51 tests pass (19 new).
+
+### Decisions made
+
+- Stools and poker chairs still have no colliders, so nothing needs disabling while walking to a seat; the walk bypasses the character controller and moves the body directly.
+- `game_opened`/`game_closed` fire on seated/leave for now; Phase 3 should move them to the overlay's open/close.
+- Debug builds also expose the phase as `data-interaction` on `[data-acehall]`.
+
+### Left / next
+
+- Real sit/stand animation and character (Phase 4). Touch controls and a dedicated on-screen interact button (Phase 6; tapping the prompt already works).
+- Limits check (`getPlayerLimitsState`), `requestLogin` and the real overlay (Phase 3).
+- Seated camera anchors were only eyeballed for poker; check the others (slots, roulette, baccarat, live booth, VIP) during the manual test.
+- Standing up leaves the avatar on the seat spot (no step-back).
+
+### Known issues
+
+- Same library warnings as Phase 1, plus the favicon 404 in dev.
+
+### How to test manually
+
+1. `npm run typecheck && npm run lint && npm test` — all pass (51 tests).
+2. `npm run dev`. Walk to a poker table (hold W a couple of seconds, then D): a pill "Press E to play Poker 2" appears below the centre, the table pulses, and a ring marks the seat.
+3. Press E. The avatar walks to the chair, turns, sits, then the camera eases into the seated view. WASD and E do nothing until seated, and dragging only looks around once the camera has arrived. A bottom panel shows the name and Leave.
+4. While seated, drag the mouse: the view looks around within limits. Press E (or click Leave; Esc also works): the camera eases back, the avatar stands, then you can move again.
+5. Press Esc during the walk: it stops and you are free.
+6. Repeat at a slot, blackjack, roulette, baccarat, live booth and the VIP tables; judge the seated framing and how the motion feels. Walk to the cashier desk (key 7 to jump there): the prompt says cashier, E logs `openCashier` in the console and does not sit.
+7. Console shows `[AceHall event]` lines for object_interacted, game_opened and game_closed. Switch language with `mount.setLocale('ka')` to see the Georgian prompt.
+8. Phone: touch controls come in Phase 6, so this cannot be tested there yet.

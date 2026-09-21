@@ -1,12 +1,21 @@
 import { createStore } from 'zustand/vanilla';
 import type { ResolvedConfig } from '../config/defaults';
-import type { Locale } from './types';
+import type { Interactable } from '../interaction/types';
+import type { InteractionPhase } from '../interaction/machine';
+import type { AceHallConfig, Locale } from './types';
 
 export interface LobbyState {
   locale: Locale;
   gameListOpen: boolean;
   /** Anchor markers and collider wireframes. */
   debug: boolean;
+  /** Operator string overrides for the UI (`config.locale.overrides`). Constant for a mounted lobby. */
+  stringOverrides: NonNullable<AceHallConfig['locale']['overrides']>;
+  /** What the avatar is close to and facing (drives the prompt and highlight). Null while busy. */
+  focus: Interactable | null;
+  interaction: { phase: InteractionPhase; target: Interactable | null };
+  setFocus(focus: Interactable | null): void;
+  setInteraction(phase: InteractionPhase, target: Interactable | null): void;
   setLocale(locale: Locale): void;
   openGameList(): void;
   toggleDebug(): void;
@@ -25,6 +34,15 @@ export function createLobbyStore(config: ResolvedConfig) {
   return createStore<LobbyState>()((set) => ({
     locale: config.locale.default,
     gameListOpen: false,
+    stringOverrides: config.locale.overrides ?? {},
+    focus: null,
+    interaction: { phase: 'free', target: null },
+    setFocus: (focus) => {
+      set({ focus });
+    },
+    setInteraction: (phase, target) => {
+      set({ interaction: { phase, target } });
+    },
     debug: hasDebugParam(),
     setLocale(locale) {
       if (!config.locale.available.includes(locale)) {

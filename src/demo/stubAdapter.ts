@@ -12,4 +12,10 @@ export const stubAdapter: OperatorAdapter = {
     }),
   getGameLaunchUrl: (gameId) =>
     Promise.reject(new Error(`No launch URL for "${gameId}": games arrive in Phase 3.`)),
+  onEvent: (event) => {
+    console.info('[AceHall event]', event);
+  },
+  openCashier: () => {
+    console.info('[AceHall] openCashier');
+  },
 };

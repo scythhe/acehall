@@ -28,6 +28,21 @@ export function attachControls(
   controls: Controls,
 ): () => void {
   const orbit = (dx: number, dy: number) => {
+    if (controls.lookMode === 'none') return;
+    if (controls.lookMode === 'seat') {
+      const look = TUNING.interaction.seatedLook;
+      controls.seatYaw = clamp(
+        controls.seatYaw - dx * TUNING.camera.sensitivity,
+        -look.maxYaw,
+        look.maxYaw,
+      );
+      controls.seatPitch = clamp(
+        controls.seatPitch - dy * TUNING.camera.sensitivity,
+        -look.maxPitchDown,
+        look.maxPitchUp,
+      );
+      return;
+    }
     controls.yaw -= dx * TUNING.camera.sensitivity;
     controls.pitch = clamp(
       controls.pitch + dy * TUNING.camera.sensitivity,
@@ -46,6 +61,8 @@ export function attachControls(
     controls.sprint = held.has('ShiftLeft') || held.has('ShiftRight');
   };
   const onKeyDown = (e: KeyboardEvent) => {
+    if (e.code === 'KeyE' && !e.repeat) controls.interactPressed = true;
+    if (e.code === 'Escape' && !e.repeat) controls.cancelPressed = true;
     if (!(e.code in KEY_MAP)) return;
     held.add(e.code);
     sync();
@@ -67,7 +84,7 @@ export function attachControls(
 
   const onPointerDown = (e: PointerEvent) => {
     root.focus({ preventScroll: true });
-    if (document.pointerLockElement === canvas) return;
+    if (document.pointerLockElement === canvas || controls.lookMode === 'none') return;
     dragId = e.pointerId;
     dragDistance = 0;
     canvas.setPointerCapture(e.pointerId);

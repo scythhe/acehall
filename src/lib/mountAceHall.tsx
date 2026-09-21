@@ -21,7 +21,7 @@ export function mountAceHall(
   const root = createRoot(container);
   root.render(
     <StrictMode>
-      <AceHallRoot config={config} store={store} />
+      <AceHallRoot config={config} store={store} adapter={options.adapter} />
     </StrictMode>,
   );
 
