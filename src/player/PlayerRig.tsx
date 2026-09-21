@@ -18,6 +18,8 @@ import type { PlayerRuntime } from './runtime';
 const { player: P, camera: C } = TUNING;
 /** Longest frame we simulate; avoids tunnelling and huge camera jumps after a tab was in the background. */
 const MAX_DT = 0.05;
+/** Below this fraction of the requested step, movement counts as blocked by geometry. */
+const BLOCKED_RATIO = 0.9;
 
 /** Kinematic capsule avatar, its controller, and the spring-arm camera. Updated in one place so the order is fixed. */
 export function PlayerRig({ runtimeRef }: { runtimeRef: RefObject<PlayerRuntime> }) {
@@ -86,18 +88,17 @@ export function PlayerRig({ runtimeRef }: { runtimeRef: RefObject<PlayerRuntime>
     position.z += moved.z;
     rb.setNextKinematicTranslation({ x: position.x, y: position.y, z: position.z });
 
-    // Sliding along a wall shouldn't leave residual speed pushing into it.
-    if (dt > 0) {
+    // Only adopt the collided movement when something actually blocked us: dividing a tiny per-frame
+    // displacement by dt adds float noise that would otherwise jitter the velocity every frame.
+    const desiredLength = Math.hypot(velocity.x, velocity.z) * dt;
+    if (dt > 0 && Math.hypot(moved.x, moved.z) < desiredLength * BLOCKED_RATIO) {
       velocity.x = moved.x / dt;
       velocity.z = moved.z / dt;
     }
 
-    if (Math.hypot(velocity.x, velocity.z) > 0.1) {
-      runtime.heading = turnToward(
-        runtime.heading,
-        Math.atan2(velocity.x, velocity.z),
-        P.turnRate * dt,
-      );
+    // Face the input direction (exact), not the collided velocity (noisy). No input: keep the last heading.
+    if (wish.x !== 0 || wish.z !== 0) {
+      runtime.heading = turnToward(runtime.heading, Math.atan2(wish.x, wish.z), P.turnRate * dt);
     }
     if (debugToolsAvailable()) {
       const root = gl.domElement.closest<HTMLElement>('[data-acehall]');
