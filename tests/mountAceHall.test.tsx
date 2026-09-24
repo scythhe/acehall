@@ -4,7 +4,7 @@ import { act } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { mountAceHall } from '../src/lib';
 import { demoConfig } from '../src/demo/demoConfig';
-import { stubAdapter } from '../src/demo/stubAdapter';
+import { createDemoAdapter } from '../src/demo/demoAdapter';
 
 // jsdom has no WebGL, so the R3F canvas is replaced with a plain element.
 vi.mock('@react-three/fiber', () => ({
@@ -26,7 +26,7 @@ function mount() {
   document.body.appendChild(target);
   let handle!: ReturnType<typeof mountAceHall>;
   act(() => {
-    handle = mountAceHall(target, { config: demoConfig, adapter: stubAdapter });
+    handle = mountAceHall(target, { config: demoConfig, adapter: createDemoAdapter() });
   });
   return { target, handle };
 }

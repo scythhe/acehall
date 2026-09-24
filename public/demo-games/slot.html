@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Demo slot</title><link rel="stylesheet" href="demo.css"></head>
+<body>
+<h1 id="title"></h1>
+<div class="reels"><div class="reel">?</div><div class="reel">?</div><div class="reel">?</div></div>
+<div class="msg" id="msg"></div>
+<div class="row" id="bets"></div>
+<button id="spin"></button>
+<script src="wallet.js"></script>
+<script>
+  var THEMES = {
+    fruit: { name: { en: 'Fruit Frenzy', ka: 'ხილის ტალღა', ru: 'Фруктовый вихрь' }, symbols: ['🍒', '🍋', '🍊', '🔔', '7️⃣'] },
+    gems: { name: { en: 'Gem Rush', ka: 'ძვირფასი ქვები', ru: 'Гонка самоцветов' }, symbols: ['💎', '🔷', '🔶', '⭐', '👑'] },
+    neon: { name: { en: 'Neon Sevens', ka: 'ნეონ სამიანები', ru: 'Неоновые семёрки' }, symbols: ['🎲', '🃏', '🍀', '🔥', '7️⃣'] },
+  };
+  var theme = THEMES[Wallet.params.get('theme')] || THEMES.fruit;
+  var L = { spin: { en: 'Spin', ka: 'დატრიალება', ru: 'Крутить' }, win: { en: 'You won', ka: 'მოგება', ru: 'Выигрыш' }, lose: { en: 'No win', ka: 'წაგება', ru: 'Без выигрыша' }, low: { en: 'Not enough balance', ka: 'არასაკმარისი ბალანსი', ru: 'Недостаточно средств' } };
+  document.getElementById('title').textContent = Wallet.t(theme.name);
+  document.getElementById('spin').textContent = Wallet.t(L.spin);
+  var stake = 1, busy = false;
+  var reels = document.querySelectorAll('.reel'), msg = document.getElementById('msg');
+  [1, 5, 10].forEach(function (v) {
+    var b = document.createElement('button'); b.textContent = v; if (v === stake) b.className = 'on';
+    b.onclick = function () { stake = v; document.querySelectorAll('#bets button').forEach(function (x) { x.className = x === b ? 'on' : ''; }); };
+    document.getElementById('bets').appendChild(b);
+  });
+  var pick = function () { return Math.floor(Math.random() * theme.symbols.length); };
+  document.getElementById('spin').onclick = function () {
+    if (busy) return; busy = true; msg.textContent = '';
+    Wallet.bet(stake).then(function (r) {
+      if (!r.ok) { msg.textContent = Wallet.t(L.low); busy = false; return; }
+      var result = [pick(), pick(), pick()], frames = 0;
+      var timer = setInterval(function () {
+        reels.forEach(function (el, i) { el.textContent = theme.symbols[frames < 8 + i * 4 ? pick() : result[i]]; });
+        if (++frames < 8 + 2 * 4 + 1) return;
+        clearInterval(timer);
+        var win = 0;
+        if (result[0] === result[1] && result[1] === result[2]) win = stake * (5 + result[0] * 5);
+        else if (result[0] === result[1] || result[1] === result[2]) win = stake * 2;
+        var done = function () { msg.textContent = win ? Wallet.t(L.win) + ' ' + win : Wallet.t(L.lose); busy = false; };
+        if (win) Wallet.payout(win).then(done); else done();
+      }, 90);
+    });
+  };
+</script>
+</body></html>

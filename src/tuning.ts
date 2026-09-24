@@ -64,6 +64,25 @@ export const TUNING = {
     highlightMinOpacity: 0.05,
     highlightMaxOpacity: 0.22,
   },
+  /** Routing the avatar to a seat from far away (game list "walk-to"). */
+  navigation: {
+    /** Cell size of the walkable grid (metres). */
+    cellSize: 0.25,
+    /** Distance kept from every solid; the capsule radius plus a small skin. */
+    clearance: 0.45,
+    /** Solids whose underside is higher than this (door lintels) can be walked under. */
+    headroom: 2,
+    /** Walking further than this to a seat uses the routed path; closer keeps the short authored approach. */
+    routeMinDistance: 3,
+    /** Spacing of the samples used for line-of-sight checks while smoothing a route. */
+    sightStep: 0.1,
+  },
+  overlay: {
+    /** Give up on the operator adapter (limits check, launch URL) after this long. */
+    launchTimeoutMs: 15000,
+    /** Fade-in of the game overlay. */
+    fadeMs: 250,
+  },
   debug: {
     anchorMarkerSize: 0.25,
   },

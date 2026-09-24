@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Demo blackjack</title><link rel="stylesheet" href="demo.css"></head>
+<body>
+<h1 id="title"></h1>
+<div>Dealer <span id="dtotal"></span></div><div class="hand" id="dealer"></div>
+<div class="msg" id="msg"></div>
+<div>You <span id="ptotal"></span></div><div class="hand" id="player"></div>
+<div class="row" id="stakes"></div>
+<div class="row"><button id="deal"></button><button id="hit"></button><button id="stand"></button><button id="double"></button></div>
+<script src="wallet.js"></script>
+<script>
+  var L = { title: { en: 'Blackjack', ka: 'ბლექჯეკი', ru: 'Блэкджек' }, deal: { en: 'Deal', ka: 'დარიგება', ru: 'Раздать' }, hit: { en: 'Hit', ka: 'კიდევ', ru: 'Ещё' }, stand: { en: 'Stand', ka: 'გაჩერება', ru: 'Стоп' }, dbl: { en: 'Double', ka: 'გაორმაგება', ru: 'Удвоить' },
+    win: { en: 'You win', ka: 'მოიგეთ', ru: 'Вы выиграли' }, lose: { en: 'Dealer wins', ka: 'დილერი იგებს', ru: 'Выиграл дилер' }, push: { en: 'Push', ka: 'ფიფქი', ru: 'Ничья' }, bj: { en: 'Blackjack!', ka: 'ბლექჯეკი!', ru: 'Блэкджек!' }, bust: { en: 'Bust', ka: 'გადაჭარბება', ru: 'Перебор' }, low: { en: 'Not enough balance', ka: 'არასაკმარისი ბალანსი', ru: 'Недостаточно средств' } };
+  var $ = function (id) { return document.getElementById(id); };
+  $('title').textContent = Wallet.t(L.title); $('deal').textContent = Wallet.t(L.deal); $('hit').textContent = Wallet.t(L.hit); $('stand').textContent = Wallet.t(L.stand); $('double').textContent = Wallet.t(L.dbl);
+  var stake = 5, bet = 0, deck, player, dealer, playing = false, busy = false;
+  [1, 5, 25].forEach(function (v) {
+    var b = document.createElement('button'); b.textContent = v; if (v === stake) b.className = 'on';
+    b.onclick = function () { if (!playing) { stake = v; document.querySelectorAll('#stakes button').forEach(function (x) { x.className = x === b ? 'on' : ''; }); } };
+    $('stakes').appendChild(b);
+  });
+  var RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'], SUITS = ['♠', '♥', '♦', '♣'];
+  function newDeck() { var d = []; RANKS.forEach(function (r) { SUITS.forEach(function (s) { d.push({ r: r, s: s }); }); }); for (var i = d.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = d[i]; d[i] = d[j]; d[j] = t; } return d; }
+  function total(hand) { var sum = 0, aces = 0; hand.forEach(function (c) { if (c.r === 'A') { aces++; sum += 11; } else sum += 'JQK'.indexOf(c.r) >= 0 || c.r === '10' ? 10 : Number(c.r); }); while (sum > 21 && aces-- > 0) sum -= 10; return sum; }
+  function draw(el, hand, hideSecond) { el.innerHTML = ''; hand.forEach(function (c, i) { var d = document.createElement('div'); var hidden = hideSecond && i === 1; d.className = 'card' + (hidden ? ' back' : (c.s === '♥' || c.s === '♦' ? ' red' : '')); d.textContent = c.r + c.s; el.appendChild(d); }); }
+  function render(hideDealer) { draw($('dealer'), dealer, hideDealer); draw($('player'), player, false); $('dtotal').textContent = hideDealer ? '' : total(dealer); $('ptotal').textContent = total(player); $('hit').disabled = $('stand').disabled = $('double').disabled = !playing || busy; $('deal').disabled = playing || busy; }
+  function finish(key, payout) {
+    playing = false; render(false); $('msg').textContent = Wallet.t(L[key]);
+    var done = function () { busy = false; render(false); };
+    busy = true; if (payout) Wallet.payout(payout).then(done); else done();
+  }
+  function settle() {
+    while (total(dealer) < 17) dealer.push(deck.pop());
+    var p = total(player), d = total(dealer);
+    if (d > 21 || p > d) finish('win', bet * 2); else if (p === d) finish('push', bet); else finish('lose', 0);
+  }
+  $('deal').onclick = function () {
+    busy = true; $('msg').textContent = '';
+    Wallet.bet(stake).then(function (r) {
+      if (!r.ok) { $('msg').textContent = Wallet.t(L.low); busy = false; return; }
+      bet = stake; deck = newDeck(); player = [deck.pop(), deck.pop()]; dealer = [deck.pop(), deck.pop()]; playing = true; busy = false;
+      if (total(player) === 21) { playing = false; if (total(dealer) === 21) finish('push', bet); else finish('bj', Math.round(bet * 2.5)); } else render(true);
+    });
+  };
+  $('hit').onclick = function () { player.push(deck.pop()); if (total(player) > 21) finish('bust', 0); else render(true); };
+  $('stand').onclick = settle;
+  $('double').onclick = function () {
+    busy = true; render(true);
+    Wallet.bet(bet).then(function (r) {
+      busy = false;
+      if (!r.ok) { $('msg').textContent = Wallet.t(L.low); render(true); return; }
+      bet *= 2; player.push(deck.pop()); if (total(player) > 21) finish('bust', 0); else settle();
+    });
+  };
+  player = []; dealer = []; render(false);
+</script>
+</body></html>

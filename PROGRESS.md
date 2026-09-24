@@ -5,7 +5,7 @@
 | 0   | Scaffold & foundations            | ✅ Done |
 | 1   | Greybox scene & player            | ✅ Done |
 | 2   | Interaction & sit-down transition | ✅ Done |
-| 3   | Overlay, adapter & demo           | —       |
+| 3   | Overlay, adapter & demo           | ✅ Done |
 | 4   | Asset pipeline & art pass         | —       |
 | 5   | White-labeling & localization     | —       |
 | 6   | Mobile & performance              | —       |
@@ -150,3 +150,89 @@
 6. Repeat at a slot, blackjack, roulette, baccarat, live booth and the VIP tables; judge the seated framing and how the motion feels. Walk to the cashier desk (key 7 to jump there): the prompt says cashier, E logs `openCashier` in the console and does not sit.
 7. Console shows `[AceHall event]` lines for object_interacted, game_opened and game_closed. Switch language with `mount.setLocale('ka')` to see the Georgian prompt.
 8. Phone: touch controls come in Phase 6, so this cannot be tested there yet.
+
+---
+
+## Phase 3 — Overlay, adapter & demo (2026-09-21)
+
+### Done
+
+- **Game flow** (`src/overlay/`): sitting down runs `prepareLaunch` (`launch.ts`): `getSession` → `requestLogin` if signed out → `getPlayerLimitsState` → `getGameLaunchUrl(gameId, {locale, device})`, each with a 15 s timeout. Outcomes: the game opens in `GameOverlay`; `canPlay: false` shows the operator's `reason` and launches nothing; a guest triggers `requestLogin` and a "please sign in" notice; adapter errors show a message with Retry. `useGameController` owns the life cycle and emits `game_opened` (when the game actually opens) and `game_closed` (with duration). Leaving the seat, by any route, closes the overlay.
+- **Overlay:** full-screen dialog with a header (game name, Close) and a sandboxed iframe (`allow-scripts allow-same-origin allow-forms allow-popups`), fade-in, loading text until the frame loads. Esc or Close leaves the seat (or just closes, for directly opened games).
+- **postMessage bridge** (`bridge.ts`, pure): accepts only `{source:'acehall-game', type:'close'|'balance_changed'}`, from an origin in `allowedGameOrigins` and from the iframe's own window. Everything else is silently ignored. `balance_changed` re-fetches the session through the adapter; no value from a message is ever used.
+- **Session and HUD** (`src/adapter/session.ts`, `src/ui/Hud.tsx`): session loaded on mount, follows `subscribeBalance`. HUD top-left: name and balance (`Intl.NumberFormat`, per locale and currency). Top-right: "Skip to game list" and a settings popover (quality, mute + volume, language). The centre of the screen stays free.
+- **Game list** (`GameList.tsx`, `gameListModel.ts`): searchable (name, category, kind), grouped by category or kind, one entry per game. Select behaviour comes from `config.gameList.selectBehavior`: `walk-to` sends the avatar to the nearest seat of that game; `open-directly` launches without sitting. `game_list_opened` is emitted.
+- **Walk across the hall** (`src/interaction/route.ts`): A* over a 0.25 m grid built from the same colliders as the physics world (things above 2 m, such as the VIP door lintel, are walkable under), then straightened by line-of-sight checks. The route ends at the seat's approach point, then the existing authored approach. Walks shorter than 3 m keep the Phase 2 path. `controls.goTo` carries the request. (This replaces the "waypoint graph" from the plan: it needs no hand-authored data and covers every anchor.)
+- **Demo:** `src/demo/demoAdapter.ts` (play money, in memory; `?guest` simulates a signed-out player and `?limit=<text>` an operator limit). Games in `public/demo-games/`: blackjack, roulette, three slot themes (one page), and a placeholder page for poker, baccarat and live-dealer tables. They talk to the demo adapter with `acehall-demo-game` messages (`hello`, `bet`, `payout`), which the real bridge ignores, and send `balance_changed` afterwards. Every game page is labelled "DEMO · PLAY MONEY". Names in ka/en/ru.
+- **Input:** the keyboard handler ignores keys typed in inputs or inside `[data-acehall-modal]`, so search typing and overlay keys cannot move the avatar.
+- 72 tests pass (21 new: bridge, launch flow, game list, money format, string parity, routing to every seat, VIP doorway, walk-to).
+
+### Decisions made
+
+- Sandbox includes `allow-same-origin` (real operator games generally need it). Chrome logs a warning about that combination for the same-origin demo games; it is expected.
+- Demo wallet messages are a demo-only protocol; the public bridge protocol is unchanged and no public types changed.
+- The seated placeholder panel from Phase 2 (`SeatedPanel`) is removed; the overlay replaces it.
+- Quality and audio settings are stored in the lobby store only; they are consumed in Phase 6 (quality) and Phase 4 (audio).
+
+### Left / next
+
+- Real game-iframe failure handling (a game page that never loads shows the loading text forever) and slow-network cases: Phase 8.
+- If a zone is disabled, its games still appear in the game list; `walk-to` then does nothing. Phase 5 (config validation) should filter them.
+- Touch: the overlay and list work on touch, but there is no on-screen interact button or joystick yet (Phase 6).
+- Poker, baccarat and live-dealer tables open the placeholder page, not a game.
+
+### Known issues
+
+- Same library warnings and favicon 404 as before, plus Chrome's sandbox warning noted above.
+- Once, in the first Playwright run of the session, the avatar sat at a poker table and left again with no input from me. I could not reproduce it on several fresh loads. If you see the avatar move by itself, tell me.
+
+### How to test manually
+
+1. `npm run typecheck && npm run lint && npm test` — all pass (72 tests).
+2. `npm run dev`. Top-left shows "Demo Player, GEL 1,000.00"; top-right "Skip to game list" and a gear.
+3. Click "Skip to game list". Type "rou": only Roulette remains. WASD/E while typing do not move the avatar. Clear the search: games are grouped (Slots, Blackjack, Roulette, Baccarat, Poker, Live dealer) with one entry each.
+4. Pick Roulette. The avatar walks around tables and slot banks (not through them) to the nearest roulette table, sits, the camera eases in, and the overlay fades in with the game. Spin: the HUD balance changes after each round.
+5. Click Close (or press Esc): the camera eases back, the avatar stands, you can move again.
+6. Walk to a slot machine, press E: the slot game opens the same way. Try a poker table: it shows the "demo has no game" page.
+7. Open http://localhost:5173/?limit=Daily%20limit%20reached and play anything: the overlay shows "You cannot play right now / Daily limit reached" and no game loads. Open `/?guest`: "Please sign in to play." and the console logs `requestLogin`.
+8. Gear menu: change language (the HUD and prompts switch to Georgian/Russian), tick Mute, change quality (stored only).
+9. Console: `[AceHall event]` lines for `object_interacted`, `game_opened`, `game_closed`, `game_list_opened`.
+10. Phone (`npm run dev -- --host`): HUD fits at 390 px, list and overlay fill the screen without side scrolling. You still cannot walk (Phase 6), but the list's "walk-to" and tapping the prompt work.
+
+---
+
+## Phase 3 addendum — in-scene demo poker (2026-09-21)
+
+Poker is now played **on the table itself** (no overlay, no iframe), as a demo of where in-scene games go.
+
+### Done
+
+- **Internal hook, no public API change** (`src/scene/games/sceneGame.ts`): a game registered for a `gameId` is drawn in the 3D scene instead of the iframe overlay. `SceneGame.open(context)` gets the table, all its seats and the player's seat, and returns `{ Scene, Controls, close }`. Everything else (limits check, login, `game_opened`/`game_closed`, leaving with E/Esc, the seat sequence) is shared with overlay games. `open()` may reject with a message, which is shown like any launch error. The registry is module-level and internal; promoting it to a public option (`sceneGames`) is a later, approved API change.
+- **Poker engine** (`src/demo/poker/`, pure and tested): Texas Hold'em, blinds 1/2, buy-in 100. Hand evaluator (best 5 of 7, wheel, kickers), full betting rounds, min-raise rules, all-in run-outs, main and side pots, heads-up blinds. Bots (`bots.ts`) play by hand strength and pot odds with some randomness and bluffing; they rebuy when busted.
+- **On the table** (`PokerScene.tsx`): your hole cards face-up in front of you, bots' cards face-down (revealed at showdown, folded cards removed), the board laid out to read correctly from your seat, chip stacks for bets and the pot, a dealer button, cards that fly in from the middle, and four bot avatars with name/stack/last-action tags (folded bots are ghosted). Bots take the four seats furthest from you.
+- **Controls** (`PokerControls.tsx`): a slim bar along the bottom edge: Fold / Check-Call / Raise-to with a slider, ½ pot / pot / all-in shortcuts, Leave. Keys F, C, R, and E to leave. All text in ka/en/ru.
+- **Wallet:** buy-in is taken from the demo adapter's display balance (`adapter.wallet`); leaving cashes the stack back exactly once. A player who cannot afford the buy-in sees "Not enough balance for the buy-in.". The game list always walks to poker tables (a scene game needs a seat).
+- **Debug aid:** dev/`?debug` builds also write the camera pose to `data-camera` on `[data-acehall]`.
+- 88 tests pass (16 new): all hand categories, betting flow, side pots, heads-up, chips conserved over 3,000 random five-player hands, bot seat choice, layout, cash-out, and launching without a URL.
+
+### Decisions made
+
+- Poker only; blackjack, roulette and slots stay overlays. Bots are scripted and local, so this is not multiplayer presence.
+- DOM action bar rather than clickable 3D buttons (works on touch).
+- The demo game registers in `src/demo/main.ts`, so a library consumer without it gets the old placeholder page for poker.
+
+### Left / next
+
+- Seated camera anchors are unchanged, so from corner seats the table is seen at an angle and a neighbouring bot can sit close to the lens. A per-game camera or a nicer anchor for poker seats would help.
+- Bots are capsule placeholders (real characters and sit animation in Phase 4); chips and cards are simple meshes and canvas textures.
+- No dealing sound or chip audio yet (Phase 4).
+- The bot AI is intentionally simple.
+
+### How to test manually
+
+1. `npm run dev`. Open "Skip to game list", pick Poker (or walk to a poker table and press E).
+2. The avatar sits, the camera eases in, and there is **no overlay**: four bots sit at the table, cards are dealt onto the felt, and a bar appears at the bottom. Your balance drops by 100.
+3. Play a few hands: Call/Check (C), Raise (slider then R), Fold (F). Watch the board build, bot tags update, the pot grow, and the winner text ("Sopo wins 48 with Straight").
+4. Leave table (or E): the camera eases back, you stand, your remaining chips return to the balance.
+5. `/?guest` or `/?limit=text`: poker respects them like any other game.
+6. Phone-size viewport: the bar fits at 390 px.

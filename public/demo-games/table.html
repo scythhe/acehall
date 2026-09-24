@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Demo table</title><link rel="stylesheet" href="demo.css"></head>
+<body>
+<h1 id="title"></h1>
+<p id="text" style="max-width:32em;opacity:.8"></p>
+<script>
+  var params = new URLSearchParams(location.search), locale = params.get('locale') || 'en';
+  var TEXT = { en: "This is where the operator's live game opens. The demo has no game for this table.", ka: 'აქ იხსნება ოპერატორის ლაივ თამაში. დემოში ამ მაგიდისთვის თამაში არ არის.', ru: 'Здесь открывается живая игра оператора. В демо для этого стола игры нет.' };
+  document.getElementById('title').textContent = params.get('title') || 'Demo table';
+  document.getElementById('text').textContent = TEXT[locale] || TEXT.en;
+</script>
+</body></html>

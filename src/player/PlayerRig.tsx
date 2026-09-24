@@ -196,6 +196,21 @@ export function PlayerRig({ runtimeRef, interaction }: PlayerRigProps) {
       );
     }
     camera.lookAt(orbitLookAt);
+    if (debugToolsAvailable()) {
+      const root = gl.domElement.closest<HTMLElement>('[data-acehall]');
+      if (root) {
+        root.dataset.camera = [
+          camera.position.x,
+          camera.position.y,
+          camera.position.z,
+          orbitLookAt.x,
+          orbitLookAt.y,
+          orbitLookAt.z,
+          controls.seatYaw,
+          controls.seatPitch,
+        ].join(',');
+      }
+    }
 
     // Fade the avatar out when the camera is inside its personal space (walls, seated view).
     head.set(position.x, position.y + 1.4, position.z);

@@ -60,7 +60,12 @@ export function attachControls(
     controls.right = held.has('KeyD') || held.has('ArrowRight');
     controls.sprint = held.has('ShiftLeft') || held.has('ShiftRight');
   };
+  // Typing in a field, or anything inside a modal (game overlay, game list), must not move the avatar.
+  const isModalTarget = (e: Event) =>
+    e.target instanceof Element &&
+    e.target.closest('input, select, textarea, [data-acehall-modal]') !== null;
   const onKeyDown = (e: KeyboardEvent) => {
+    if (isModalTarget(e)) return;
     if (e.code === 'KeyE' && !e.repeat) controls.interactPressed = true;
     if (e.code === 'Escape' && !e.repeat) controls.cancelPressed = true;
     if (!(e.code in KEY_MAP)) return;
@@ -70,9 +75,10 @@ export function attachControls(
   };
   const onKeyUp = (e: KeyboardEvent) => {
     if (!(e.code in KEY_MAP)) return;
+    // Always release, so a key let go inside a modal cannot stay stuck.
     held.delete(e.code);
     sync();
-    e.preventDefault();
+    if (!isModalTarget(e)) e.preventDefault();
   };
   const releaseAll = () => {
     held.clear();

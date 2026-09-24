@@ -1,5 +1,6 @@
 import type { SeatAnchor, Vec3 } from '../scene/anchors/types';
 import type { Vec2 } from '../player/movement';
+import type { Router } from './route';
 
 export interface Walker {
   x: number;
@@ -19,16 +20,8 @@ export interface WalkRules {
   tolerance: number;
 }
 
-/**
- * Short authored route to a seat. When the avatar is on the outer side of the seat, it first aims at a point
- * straight out from the seat (away from the object), so it arrives from the front instead of cutting a corner.
- */
-export function buildPath(
-  from: Vec2,
-  seat: SeatAnchor,
-  objectPosition: Vec3,
-  approachDistance: number,
-): Vec2[] {
+/** Point straight out from the seat, away from its object, where the avatar lines up before sitting. */
+export function approachPoint(seat: SeatAnchor, objectPosition: Vec3, distance: number): Vec2 {
   const [sx, , sz] = seat.position;
   let ox = sx - objectPosition[0];
   let oz = sz - objectPosition[2];
@@ -40,13 +33,40 @@ export function buildPath(
     ox /= length;
     oz /= length;
   }
+  return { x: sx + ox * distance, z: sz + oz * distance };
+}
+
+/**
+ * Short authored route to a seat. When the avatar is on the outer side of the seat, it first aims at a point
+ * straight out from the seat (away from the object), so it arrives from the front instead of cutting a corner.
+ */
+export function buildPath(
+  from: Vec2,
+  seat: SeatAnchor,
+  objectPosition: Vec3,
+  approachDistance: number,
+): Vec2[] {
+  const [sx, , sz] = seat.position;
+  const approach = approachPoint(seat, objectPosition, approachDistance);
   const path: Vec2[] = [];
-  const outside = (from.x - sx) * ox + (from.z - sz) * oz;
-  if (outside > approachDistance * 0.5) {
-    path.push({ x: sx + ox * approachDistance, z: sz + oz * approachDistance });
-  }
+  const outside =
+    ((from.x - sx) * (approach.x - sx) + (from.z - sz) * (approach.z - sz)) / approachDistance;
+  if (outside > approachDistance * 0.5) path.push(approach);
   path.push({ x: sx, z: sz });
   return path;
+}
+
+/** Route from anywhere in the hall: around obstacles to the approach point, then into the seat. */
+export function buildRoutedPath(
+  from: Vec2,
+  seat: SeatAnchor,
+  objectPosition: Vec3,
+  approachDistance: number,
+  router: Router,
+): Vec2[] {
+  const approach = approachPoint(seat, objectPosition, approachDistance);
+  const route = router(from, approach) ?? [approach];
+  return [...route, { x: seat.position[0], z: seat.position[2] }];
 }
 
 export function createWalker(from: Vec2, startSpeed: number): Walker {

@@ -2,7 +2,26 @@ import { createStore } from 'zustand/vanilla';
 import type { ResolvedConfig } from '../config/defaults';
 import type { Interactable } from '../interaction/types';
 import type { InteractionPhase } from '../interaction/machine';
-import type { AceHallConfig, Locale } from './types';
+import type { SceneGameSession } from '../scene/games/sceneGame';
+import type { AceHallConfig, Locale, PlayerSession } from './types';
+
+/** A game being launched or shown in the overlay. */
+export interface GameSession {
+  gameId: string;
+  /** `seat`: opened after sitting down, closing stands the avatar up. `direct`: opened from the game list. */
+  source: 'seat' | 'direct';
+  /** `blocked` = operator limits said no; `login` = player is not authenticated. */
+  status: 'preparing' | 'open' | 'blocked' | 'login' | 'error';
+  url?: string;
+  /** `scene`: played on the table in the 3D scene; `overlay`: an iframe over the lobby. */
+  presentation: 'overlay' | 'scene';
+  /** The running in-scene game, once open. */
+  scene?: SceneGameSession;
+  /** Operator-supplied reason when blocked. */
+  message?: string;
+}
+
+export type QualitySetting = NonNullable<AceHallConfig['quality']>;
 
 export interface LobbyState {
   locale: Locale;
@@ -14,10 +33,23 @@ export interface LobbyState {
   /** What the avatar is close to and facing (drives the prompt and highlight). Null while busy. */
   focus: Interactable | null;
   interaction: { phase: InteractionPhase; target: Interactable | null };
+  /** Display-only, mirrored from the operator adapter. */
+  session: PlayerSession | null;
+  game: GameSession | null;
+  /** Stored for the quality tiers (Phase 6). */
+  quality: QualitySetting;
+  /** Stored for the audio system (Phase 4). */
+  audio: { muted: boolean; volume: number };
+  setSession(session: PlayerSession | null): void;
+  setBalance(balance: number): void;
+  setGame(game: GameSession | null): void;
+  setQuality(quality: QualitySetting): void;
+  setAudio(audio: Partial<{ muted: boolean; volume: number }>): void;
   setFocus(focus: Interactable | null): void;
   setInteraction(phase: InteractionPhase, target: Interactable | null): void;
   setLocale(locale: Locale): void;
   openGameList(): void;
+  closeGameList(): void;
   toggleDebug(): void;
 }
 
@@ -36,6 +68,25 @@ export function createLobbyStore(config: ResolvedConfig) {
     gameListOpen: false,
     stringOverrides: config.locale.overrides ?? {},
     focus: null,
+    session: null,
+    game: null,
+    quality: config.quality,
+    audio: { muted: !config.audio.enabledByDefault, volume: config.audio.volume },
+    setSession: (session) => {
+      set({ session });
+    },
+    setBalance: (balance) => {
+      set((state) => (state.session ? { session: { ...state.session, balance } } : state));
+    },
+    setGame: (game) => {
+      set({ game });
+    },
+    setQuality: (quality) => {
+      set({ quality });
+    },
+    setAudio: (audio) => {
+      set((state) => ({ audio: { ...state.audio, ...audio } }));
+    },
     interaction: { phase: 'free', target: null },
     setFocus: (focus) => {
       set({ focus });
@@ -53,6 +104,9 @@ export function createLobbyStore(config: ResolvedConfig) {
     },
     openGameList() {
       if (config.gameList.enabled) set({ gameListOpen: true });
+    },
+    closeGameList() {
+      set({ gameListOpen: false });
     },
     toggleDebug() {
       set((state) => ({ debug: !state.debug }));

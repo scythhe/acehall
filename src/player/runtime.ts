@@ -15,6 +15,8 @@ export interface Controls {
   /** One-shot requests, consumed by the interaction step. */
   interactPressed: boolean;
   cancelPressed: boolean;
+  /** Request to walk to a game (game list). Matches an anchor, or the nearest seat of a game. Consumed by the step. */
+  goTo: { anchorId?: string; gameId?: string } | null;
   /** True while a sit-down sequence owns the avatar and camera: movement and orbit input are ignored. */
   locked: boolean;
   /** What pointer drags do: orbit the avatar camera, look around from the seat, or nothing. */
@@ -49,6 +51,7 @@ export function createPlayerRuntime(): PlayerRuntime {
       pitch: TUNING.camera.initialPitch,
       interactPressed: false,
       cancelPressed: false,
+      goTo: null,
       locked: false,
       lookMode: 'orbit',
       seatYaw: 0,

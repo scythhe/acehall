@@ -1,7 +1,8 @@
 import { TUNING } from '../tuning';
 import type { Vec2 } from '../player/movement';
 import { clamp01, easeInOutCubic } from './easing';
-import { buildPath, createWalker, type Walker } from './path';
+import { buildPath, buildRoutedPath, createWalker, type Walker } from './path';
+import type { Router } from './route';
 import type { Interactable } from './types';
 
 const I = TUNING.interaction;
@@ -45,10 +46,16 @@ export function beginWalk(
   target: Interactable,
   from: Vec2,
   startSpeed: number,
+  router?: Router,
 ) {
   if (state.phase !== 'free') return;
   state.target = target;
-  state.path = buildPath(from, target.seat, target.objectPosition, I.approachDistance);
+  const [sx, , sz] = target.seat.position;
+  const far = Math.hypot(sx - from.x, sz - from.z) > TUNING.navigation.routeMinDistance;
+  state.path =
+    router && far
+      ? buildRoutedPath(from, target.seat, target.objectPosition, I.approachDistance, router)
+      : buildPath(from, target.seat, target.objectPosition, I.approachDistance);
   state.walker = createWalker(from, Math.min(startSpeed, I.walkSpeed));
   enter(state, 'walking');
 }
